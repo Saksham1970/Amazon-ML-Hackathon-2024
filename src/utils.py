@@ -82,7 +82,9 @@ def download_images(image_links, download_folder, allow_multiprocessing=True):
             download_image, save_folder=download_folder, retries=3, delay=3
         )
 
-        with multiprocessing.Pool(64) as pool:
+        num_processes = multiprocessing.cpu_count()
+        
+        with multiprocessing.Pool(num_processes) as pool:
             list(
                 tqdm(
                     pool.imap(download_image_partial, image_links),
