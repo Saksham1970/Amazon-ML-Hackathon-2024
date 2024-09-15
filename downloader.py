@@ -3,4 +3,4 @@ import pandas as pd
 
 for dataset in ["train", "test"]:
     df = pd.read_csv(f"./dataset/{dataset}.csv")
-    download_images(df["image_link"], f"./dataset/{dataset}/", True)
+    download_images(df["image_link"], f"./images/{dataset}/", True)
