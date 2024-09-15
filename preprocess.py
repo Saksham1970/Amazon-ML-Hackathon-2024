@@ -6,19 +6,31 @@ import multiprocessing as mp
 
 class ImageProcessor:
     def __init__(self):
-        self.clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
         self.sharpen_kernel = np.array([[-1,-1,-1], [-1,9,-1], [-1,-1,-1]], dtype=np.float32) / 9
 
     def enhance_image(self, image):
-        # Convert to grayscale for OCR
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        # Convert to LAB color space
+        lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
+        l, a, b = cv2.split(lab)
         
-        # Apply CLAHE for contrast enhancement
-        enhanced = self.clahe.apply(gray)
+        # Apply CLAHE only to the L-channel with reduced clip limit
+        clahe = cv2.createCLAHE(clipLimit=1.0, tileGridSize=(8,8))
+        enhanced_l = clahe.apply(l)
         
-        # Quick sharpening
-        sharpened = cv2.filter2D(enhanced, -1, self.sharpen_kernel)
+        # Merge the channels back
+        lab_enhanced = cv2.merge((enhanced_l, a, b))
         
+        # Convert back to BGR color space
+        enhanced = cv2.cvtColor(lab_enhanced, cv2.COLOR_LAB2BGR)
+        
+        # Apply reduced sharpening
+        sharpened = self.unsharp_mask(enhanced)
+        
+        return sharpened
+    
+    def unsharp_mask(self, image, sigma=1.0, strength=1.5):
+        blurred = cv2.GaussianBlur(image, (0, 0), sigma)
+        sharpened = cv2.addWeighted(image, 1 + strength, blurred, -strength, 0)
         return sharpened
 
     def resize_image(self, image, max_size=600): 
@@ -40,10 +52,11 @@ def process_image(args):
     resized = processor.resize_image(image)
     enhanced = processor.enhance_image(resized)
     cv2.imwrite(output_path, enhanced)
+    os.remove(input_path)
     return input_path
 
 def main():
-    input_folder = "./dataset/train"
+    input_folder = "./images/train/train"
     output_folder = "./processed/train"
     os.makedirs(output_folder, exist_ok=True)
 
@@ -53,8 +66,6 @@ def main():
                   os.path.join(output_folder, f)) 
                  for f in image_files]
     
-   
-
     num_processes = mp.cpu_count()
     
     with mp.Pool(num_processes) as pool:
