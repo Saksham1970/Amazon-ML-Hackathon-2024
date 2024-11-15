@@ -1,141 +1,123 @@
-# ML Challenge Problem Statement
+# Amazon ML Challenge 2024: Entity Value Extraction from Images
 
-## Feature Extraction from Images
+## Overview
 
-In this hackathon, the goal is to create a machine learning model that extracts entity values from images. This capability is crucial in fields like healthcare, e-commerce, and content moderation, where precise product information is vital. As digital marketplaces expand, many products lack detailed textual descriptions, making it essential to obtain key details directly from images. These images provide important information such as weight, volume, voltage, wattage, dimensions, and many more, which are critical for digital stores.
+This repository contains our solution for the **Amazon ML Challenge 2024**, where we ranked **34th** with an **F1 score of 0.642**. The challenge focused on extracting entity values (e.g., weight, volume, dimensions) directly from product images, a critical task for e-commerce platforms to ensure comprehensive product information.
 
-### Data Description: 
+---
 
-The dataset consists of the following columns: 
+## Problem Statement
 
-1. **index:** An unique identifier (ID) for the data sample
-2. **image_link**: Public URL where the product image is available for download. Example link - https://m.media-amazon.com/images/I/71XfHPR36-L.jpg
-    To download images use `download_images` function from `src/utils.py`. See sample code in `src/test.ipynb`.
-3. **group_id**: Category code of the product
-4. **entity_name:** Product entity name. For eg: “item_weight” 
-5. **entity_value:** Product entity value. For eg: “34 gram” 
-    Note: For test.csv, you will not see the column `entity_value` as it is the target variable.
+The goal was to develop a machine learning model capable of extracting entity values directly from product images. This capability addresses gaps where textual product descriptions are missing or incomplete, enabling extraction of vital information such as weight, volume, voltage, wattage, and dimensions.
 
-### Output Format:
+---
 
-The output file should be a csv with 2 columns:
+## Dataset and Output Format
 
-1. **index:** The unique identifier (ID) of the data sample. Note the index should match the test record index.
-2. **prediction:** A string which should have the following format: “x unit” where x is a float number in standard formatting and unit is one of the allowed units (allowed units are mentioned in the Appendix). The two values should be concatenated and have a space between them. For eg: “2 gram”, “12.5 centimetre”, “2.56 ounce” are valid. Few invalid cases: “2 gms”, “60 ounce/1.7 kilogram”, “2.2e2 kilogram” etc.
-    Note: Make sure to output a prediction for all indices. If no value is found in the image for any test sample, return empty string, i.e, `“”`. If you have less/more number of output samples in the output file as compared to test.csv, your output won’t be evaluated. 
+### Input:
+- **Training Data**: Images with labeled entities (e.g., weight, height).
+- **Test Data**: Images without labeled entities; the model must predict entity values.
 
-### File Descriptions:
+### Output:
+A CSV file with the following format:
+- **index**: Unique identifier for each data sample.
+- **prediction**: Predicted entity value in the format `"x unit"`, where `x` is a float, and `unit` is one of the allowed units.
 
-*source files*
+---
 
-1. **src/sanity.py**: Sanity checker to ensure that the final output file passes all formatting checks. Note: the script will not check if less/more number of predictions are present compared to the test file. See sample code in `src/test.ipynb` 
-2. **src/utils.py**: Contains helper functions for downloading images from the image_link.
-3. **src/constants.py:** Contains the allowed units for each entity type.
-4. **sample_code.py:** We also provided a sample dummy code that can generate an output file in the given format. Usage of this file is optional. 
+## Approach
 
-*Dataset files*
+### Image Preprocessing:
+1. **Resizing**: 
+   - Images resized to a maximum of 600 pixels to maintain aspect ratio while reducing computational overhead.
+2. **Contrast Enhancement (CLAHE)**:
+   - Improved visibility of darker regions for better text readability.
+3. **Sharpening (Unsharp Masking)**:
+   - Enhanced fine details such as edges and labels for precise entity extraction.
 
-1. **dataset/train.csv**: Training file with labels (`entity_value`).
-2. **dataset/test.csv**: Test file without output labels (`entity_value`). Generate predictions using your model/solution on this file's data and format the output file to match sample_test_out.csv (Refer the above section "Output Format")
-3. **dataset/sample_test.csv**: Sample test input file.
-4. **dataset/sample_test_out.csv**: Sample outputs for sample_test.csv. The output for test.csv must be formatted in the exact same way. Note: The predictions in the file might not be correct
+### Model Architecture:
+- **Model Used**: **IDEFICS2** (Vision-Language Model)
+  - Pretrained for tasks like Optical Character Recognition (OCR) and Visual Question Answering (VQA).
+  - Extracted textual details directly from images.
+  - Ideal for handling scenarios with limited or unclear textual descriptions in images.
 
-### Constraints
+### Fine-tuning:
+- **Technique**: QLoRA (Quantized Low-Rank Adapter)
+  - Efficient fine-tuning by updating specific model layers with limited computational resources.
+- **Dataset**: 1.5 lakh images from the training set.
+- **Epochs**: Single epoch with quantized (16-bit floating point) weights.
 
-1. You will be provided with a sample output file and a sanity checker file. Format your output to match the sample output file exactly and pass it through the sanity checker to ensure its validity. Note: If the file does not pass through the sanity checker, it will not be evaluated. You should recieve a message like `Parsing successfull for file: ...csv` if the output file is correctly formatted.
+---
 
-2. You are given the list of allowed units in constants.py and also in Appendix. Your outputs must be in these units. Predictions using any other units will be considered invalid during validation.
+## Pipeline
 
-### Evaluation Criteria
+### 1. **Preprocessing**:
+- Script: `preprocess.py`
+- Key Features:
+  - Batch processing of images using multiprocessing.
+  - Image enhancement with CLAHE and sharpening.
+  - Resized images stored for model training.
 
-Submissions will be evaluated based on F1 score, which are standard measures of prediction accuracy for classification and extraction problems.
+### 2. **Model Training**:
+- Notebook: `training.ipynb`
+- Key Features:
+  - Data formatted with a custom data collator.
+  - QLoRA fine-tuning of IDEFICS2 using the Hugging Face library.
+  - Training configuration optimized for entity extraction.
 
-Let GT = Ground truth value for a sample and OUT be output prediction from the model for a sample. Then we classify the predictions into one of the 4 classes with the following logic: 
+### 3. **Inference**:
+- Notebook: `inference.ipynb`
+- Key Features:
+  - Trained model applied to test images.
+  - Predictions saved as a CSV file in the required format.
 
-1. *True Positives* - If OUT != `""` and GT != `""` and OUT == GT
-2. *False Positives* - If OUT != `""` and GT != `""` and OUT != GT
-3. *False Positives* - If OUT != `""` and GT == `""`
-4. *False Negatives* - If OUT == `""` and GT != `""`
-5. *True Negatives* - If OUT == `""` and GT == `""` 
+---
 
-Then, F1 score = 2*Precision*Recall/(Precision + Recall) where:
+## Results
 
-1. Precision = True Positives/(True Positives + False Positives)
-2. Recall = True Positives/(True Positives + False Negatives)
+- **F1 Score**: **0.642**
+- **Rank**: **34th**
 
-### Submission File
+The solution successfully extracted entity values with competitive accuracy, leveraging efficient preprocessing, a fine-tuned Vision-Language Model, and optimized inference.
 
-Upload a test_out.csv file in the Portal with the exact same formatting as sample_test_out.csv
+---
 
-### Appendix
+## Instructions to Run
 
+### 1. Preprocessing:
+```bash
+python preprocess.py
 ```
-entity_unit_map = {
-  "width": {
-    "centimetre",
-    "foot",
-    "millimetre",
-    "metre",
-    "inch",
-    "yard"
-  },
-  "depth": {
-    "centimetre",
-    "foot",
-    "millimetre",
-    "metre",
-    "inch",
-    "yard"
-  },
-  "height": {
-    "centimetre",
-    "foot",
-    "millimetre",
-    "metre",
-    "inch",
-    "yard"
-  },
-  "item_weight": {
-    "milligram",
-    "kilogram",
-    "microgram",
-    "gram",
-    "ounce",
-    "ton",
-    "pound"
-  },
-  "maximum_weight_recommendation": {
-    "milligram",
-    "kilogram",
-    "microgram",
-    "gram",
-    "ounce",
-    "ton",
-    "pound"
-  },
-  "voltage": {
-    "millivolt",
-    "kilovolt",
-    "volt"
-  },
-  "wattage": {
-    "kilowatt",
-    "watt"
-  },
-  "item_volume": {
-    "cubic foot",
-    "microlitre",
-    "cup",
-    "fluid ounce",
-    "centilitre",
-    "imperial gallon",
-    "pint",
-    "decilitre",
-    "litre",
-    "millilitre",
-    "quart",
-    "cubic inch",
-    "gallon"
-  }
-}
+
+### 2. Model Training:
+Open and execute `training.ipynb` to fine-tune the IDEFICS2 model.
+
+### 3. Inference:
+Open and execute `inference.ipynb` to generate predictions on the test data.
+
+### 4. Output Validation:
+Use `src/sanity.py` to ensure the output file format matches the requirements:
+```bash
+python src/sanity.py --file path_to_test_out.csv
 ```
+
+---
+
+## Technologies Used
+
+- **Frameworks**: Hugging Face Transformers, PyTorch
+- **Libraries**: OpenCV, Pandas, tqdm
+- **Language**: Python
+
+---
+
+## Lessons Learned
+
+This challenge highlighted the importance of:
+- Effective image preprocessing for OCR tasks.
+- Efficient model fine-tuning techniques like QLoRA for resource optimization.
+- Robust pipeline development for end-to-end ML workflows.
+
+---
+
+Feel free to reach out for more details about the implementation or potential improvements!
